@@ -1,0 +1,586 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+usage()
+{
+    echo "Usage: $0 <up|destroy>"
+    exit 1
+}
+
+if [ $# -ne 1 ] ; then
+    usage
+else
+    case $1 in
+      up|destroy|do)
+          oper=$1
+      ;;
+      *)
+          usage
+      ;;
+    esac
+fi
+
+if [[ "$oper" == "up" ]]; then
+    # shellcheck disable=SC2153
+    if [ -z "$dtype" ]; then
+
+    while true; do
+     read -r -p "Deployment Type: ( bc | bc_ha | bc_ac | bc_ha_ac ): " dtype
+
+    case $dtype in
+      bc|bc_ha|bc_ac|bc_ha_ac)
+          echo "Deployment Type: ${dtype}"
+          break
+      ;;
+      *)
+          echo "Invalid Deployment Type: ${dtype}"
+      ;;
+    esac
+  done
+    else
+      dtype=$dtype
+    fi
+fi
+
+
+echo "Discovering processor architecture..."
+archdetect=$(uname -m)
+
+tversion=1.1.9
+echo "Detecting OS..."
+if [[ "$OSTYPE" == "linux"* ]]; then
+    os_str=linux
+    arch=amd64
+    ostype=Linux
+elif [[ "$OSTYPE" == "darwin"* && $archdetect == "arm64" ]]; then
+    os_str=darwin
+    arch=arm64
+    ostype=MacOS_arm64
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    os_str=darwin
+    arch=amd64
+    ostype=MacOS
+elif [[ "$OSTYPE" == "freebsd"* ]]; then
+    os_str=freebsd
+    arch=amd64
+    ostype=FreeBSD
+    echo "FreeBSD support coming soon..."
+    exit 1
+else
+    echo "Unsupported OS: $OSTYPE"
+    exit 1
+fi
+echo "OS is $ostype"
+
+dir=bin
+echo "Creating a local $dir directory if not present..."
+if [[ ! -e $dir ]]; then
+    mkdir $dir
+elif [[ ! -d $dir ]]; then
+    echo "$dir already exists but is not a directory" 1>&2
+    exit 1
+fi
+
+echo "Checking for OVA file..."
+# if .zsecrc is not present we'll assume that vSphere env was never set
+if [[ "$oper" == "up" && ! -e ./.zsecrc ]]; then
+for file in ./$dtype/bootstrap/*.ova; 
+do 
+ova_lookup=$(basename ./$dtype/bootstrap/*.ova)
+if [[ $ova_lookup == "*.ova" ]]; then
+echo "Branch Connector OVA file appears to be missing from directory ${dtype}/bootstrap. Make sure file exists and re-run zsec up..."
+exit 1
+else
+while true; do
+read -r -p "Branch Connector OVA file named ${ova_lookup} identified in directory ${dtype}/bootstrap. Is this the correct OVA to use? (yes/no): " ova_lookup_response
+case $ova_lookup_response in 
+	yes|y )
+    ova_name=$ova_lookup
+    echo "Using $ova_name for deployment..."
+    break
+    ;;
+    no|n )
+    read -r -p "Copy OVA file to $dtype/bootstrap/ and enter filename here (e.g. branchconnector.ova): " ova_manual_input
+    file_check=./$dtype/bootstrap/$ova_manual_input
+if test -f "$file_check"; then
+    echo "OVA name $ova_manual_input will be used..."
+    ova_name=$ova_manual_input
+else
+    echo "OVA does not exist by this name. Please confirm filename and path are correct and re-run zsec..."
+    exit 1    
+fi
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+    esac
+done
+fi
+break
+done
+    echo "export TF_VAR_ova_name='${ova_name}'" > .zsecrc
+    read -r -p "Enter vCenter username: " vcenter_username
+    read -r -p "Enter vCenter password: " vcenter_password
+    read -r -p "Enter vCenter server: " vcenter_server
+   
+    echo "export VSPHERE_USER='${vcenter_username}'" >> .zsecrc
+    echo "export VSPHERE_PASSWORD='${vcenter_password}'" >> .zsecrc
+    echo "export VSPHERE_SERVER='${vcenter_server}'" >> .zsecrc
+while true; do
+    read -r -p "Does your environment require vCenter SSL certificate verification to be disabled? (yes/no): " unverified_ssl_response
+case $unverified_ssl_response in 
+	yes|y ) 
+    break
+    ;;
+    no|n )
+    echo "vCenter SSL certificate verification is on..."
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+    esac
+done
+
+
+if [[ "$unverified_ssl_response" == "y"* ]]; then
+while true; do
+    read -r -p "Are you sure you want to disable SSL verification? This is not a security best practice and should only be required for environments running untrusted or self-signed certs. (yes/no): " ssl_confirmation_response
+    case $ssl_confirmation_response in
+    yes|y )
+    echo "Disabling SSL certificate verification for vCenter connectivity..."
+    echo "export VSPHERE_ALLOW_UNVERIFIED_SSL=true" >> .zsecrc
+    break
+    ;;
+    no|n )
+    echo "vCenter SSL certificate verification is on..."
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+    esac
+done
+fi
+
+if [[ "$dtype" == *"ac" ]]; then
+    echo "App Connector integrated deployment detected. Enter ZPA credentials..."
+    zpa_cloud_default=PRODUCTION
+    while true; do
+        read -r -p "Enter ZPA Cloud Name (PRODUCTION, BETA, GOV, or PREVIEW) [Default=$zpa_cloud_default]: " zpa_cloud_input
+        zpa_cloud=${zpa_cloud_input:-$zpa_cloud_default}
+        case $zpa_cloud in
+        PROD*|prod*|PRODUCTION|production)
+          echo "ZPA Cloud selected: PRODUCTION"
+          echo "export ZPA_CLOUD=\"PRODUCTION\"" >> .zspserc
+          break
+          ;;
+        BETA|beta|b|B)
+          echo "ZPA Cloud selected: BETA"
+          echo "export ZPA_CLOUD=\"BETA\"" >> .zspserc
+          break
+          ;;
+        GOV|gov|g|G)
+          echo "ZPA Cloud selected: GOV"
+          echo "export ZPA_CLOUD=\"GOV\"" >> .zspserc
+          break
+          ;;
+        PREVIEW|preview|pre*|PRE*)
+          echo "ZPA Cloud selected: PREVIEW"
+          echo "export ZPA_CLOUD=\"PREVIEW\"" >> .zspserc
+          break
+          ;;
+          *)
+          echo "Invalid Cloud. Supported values are PRODUCTION, BETA, GOV, or PREVIEW: ${zpa_cloud}."
+      ;;
+        esac
+    done
+    read -r -p "Enter ZPA Client ID: " zpa_client_id
+    echo "export ZPA_CLIENT_ID='$zpa_client_id'" >> .zsecrc
+    read -r -p "Enter ZPA Client Secret: " zpa_client_secret
+    echo "export ZPA_CLIENT_SECRET='$zpa_client_secret'" >> .zsecrc
+    read -r -p "Enter ZPA Customer ID: " zpa_customer_id
+    echo "export ZPA_CUSTOMER_ID='$zpa_customer_id'" >> .zsecrc
+
+    while true; do
+        read -r -p "Do you already have an App Connector provisioning key to use? [yes/no] " prov_key_response
+        case $prov_key_response in 
+	    yes|y ) 
+        read -r -p "Enter the name of your existing App Connector provisioning key: " byo_provisioning_key_name
+        echo "export TF_VAR_byo_provisioning_key=true" >> .zsecrc
+        echo "export TF_VAR_byo_provisioning_key_name=${byo_provisioning_key_name}" >> .zsecrc
+        break
+        ;;
+	    no|n )
+        echo "Terraform will be creating a new App Connector Group and provisioning key"
+        echo "Before proceeding, make sure you have entered all variable requirements from steps 1 and 2 in $dtype/terraform.tfvars"
+        break
+        ;;
+	    * ) echo "invalid response. Please enter yes or no";;
+        esac
+    done
+fi
+
+bc_instance_size_default=small
+while true; do
+    read -r -p "Enter BC Instance Size. Valid input = small, medium, or large. This needs to match the size chosen in the BC provisioning template [Default=$bc_instance_size_default]: " bc_instance_size_input
+    bc_instance_size=${bc_instance_size_input:-$bc_instance_size_default}
+    case $bc_instance_size in
+      small|medium|large)
+          echo "Branch Connector size: ${bc_instance_size}"
+          echo "export TF_VAR_bc_instance_size=${bc_instance_size}" >> .zsecrc
+          break
+      ;;
+      *)
+          echo "Invalid Branch Connector size: ${bc_instance_size}."
+      ;;
+    esac
+done
+
+if [[ "$dtype" != *"ha"* ]]; then
+    echo "Deployment type is $dtype. Input infrastructure details for one Branch Connector..."
+    echo "export TF_VAR_bc_count=1" >> .zsecrc
+elif [[ "$dtype" == *"ha"* ]]; then
+    echo "Deployment type is $dtype. Input infrastructure details for two Branch Connectors..."
+    echo "export TF_VAR_bc_count=2" >> .zsecrc
+fi    
+
+network_static_default=no
+while true; do
+    read -r -p "IP Configuration - Do you need to statically configure interface details? (yes/no): " network_static_default_input
+    network_static=${network_static_default_input:-$network_static_default}
+    case $network_static in
+    yes|y )
+    echo "Configuring static interface IPs (this information must match what you provided in the Branch Connector provisioning template)..."
+    break
+    ;;
+    no|n )
+    echo "Interfaces will use DHCP..."
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+    esac
+done
+
+    read -r -p "Enter the name of the vCenter Network to associate VM NICs to: " network_name
+    echo "export TF_VAR_network_name='$network_name'" >> .zsecrc
+
+while true; do
+    read -r -p "Enter vSphere Network Interface Type (vmxnet3 or e1000): " network_adapter_type
+    case $network_adapter_type in
+    vmxnet3 )
+    echo "Configuring interfaces as $network_adapter_type"
+    echo "export TF_VAR_network_adapter_type=$network_adapter_type" >> .zsecrc
+    break
+    ;;
+    e1000 )
+    echo "Configuring interfaces as $network_adapter_type"
+    echo "export TF_VAR_network_adapter_type=$network_adapter_type" >> .zsecrc
+    break
+    ;;
+	* ) echo "invalid response. Please enter vmxnet3 or e1000";;
+    esac
+done
+
+if [[ "$network_static" == "y"* && "$dtype" != *"ha"* ]]; then
+    echo "Configuring Branch Connector network information..."
+    read -r -p "Enter management IP address: " mgmt_ip
+    if [[ "$mgmt_ip" =~ ^(([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))\.){3}([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))$ ]]; then
+        echo "Management IP $mgmt_ip entered"
+        echo "export TF_VAR_mgmt_ip='[\"$mgmt_ip\"]'" >> .zsecrc
+    else
+        echo "IP format incorrect"
+        exit 1
+    fi 
+    if [[ "$dtype" == *"ac" ]]; then
+    read -r -p "Enter control IP address: " control_ip 
+    if [[ "$control_ip" =~ ^(([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))\.){3}([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))$ ]]; then
+        echo "Control IP $control_ip entered"
+        echo "export TF_VAR_control_ip='[\"$control_ip\"]'" >> .zsecrc
+    else
+        echo "IP format incorrect"
+        exit 1
+    fi 
+    fi
+    read -r -p "Enter Netmask: " netmask
+    echo "export TF_VAR_mgmt_netmask='$netmask'" >> .zsecrc
+    if [[ "$dtype" == *"ac" ]]; then
+    echo "export TF_VAR_control_netmask='$netmask'" >> .zsecrc
+    fi
+    read -r -p "Enter Default Gateway: " gateway
+    echo "export TF_VAR_mgmt_gateway='$gateway'" >> .zsecrc
+    if [[ "$dtype" == *"ac" ]]; then
+    echo "export TF_VAR_control_gateway='$gateway'" >> .zsecrc
+    fi
+    read -r -p "Enter Primary DNS Server IP: " dns_primary
+    read -r -p "Enter Secondary DNS Server IP: " dns_secondary
+    echo "export TF_VAR_dns_servers='[\"$dns_primary\",\"$dns_secondary\"]'" >> .zsecrc
+    read -r -p "Enter DNS suffix (e.g. corp.com): " dns_suffix
+    echo "export TF_VAR_dns_suffix='$dns_suffix'" >> .zsecrc
+    if [[ "$network_adapter_type" == "e1000" ]]; then
+    echo "setting interfaces to em0"
+    echo "export TF_VAR_mgmt_name=em0" >> .zsecrc
+    elif [[ "$network_adapter_type" == "vmxnet3" ]]; then
+    echo "setting interfaces to vmx0"
+    echo "export TF_VAR_mgmt_name=vmx0" >> .zsecrc
+    fi
+    read -r -p "Enter BC Provisioning URL (E.g. connector.zscalerbeta.net/api/v1/provUrl?name=esxi_test): " bc1_vm_prov_url
+    echo "Provisioning URL entered is: $bc1_vm_prov_url. Make sure this matches the BC Instance Size $bc_instance_size chosen."
+    echo "export TF_VAR_bc_vm_prov_url='[\"$bc1_vm_prov_url\"]'" >> .zsecrc
+    read -r -p "Enter BC provisioning Username: " bc_username
+    echo "export TF_VAR_bc_username=${bc_username}" >> .zsecrc
+    read -r -p "Enter BC provisioning Password: " bc_password
+    echo "export TF_VAR_bc_password=${bc_password}" >> .zsecrc
+    read -r -p "Enter BC API Key: " bc_api_key
+    echo "export TF_VAR_bc_api_key=${bc_api_key}" >> .zsecrc
+
+elif [[ "$network_static" == "y"* && "$dtype" == *"ha"* ]]; then
+    echo "Configuring Branch Connector network information..."
+    read -r -p "Enter BC #1 management IP address: " bc1_mgmt_ip 
+    if [[ "$bc1_mgmt_ip" =~ ^(([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))\.){3}([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))$ ]]; then
+        echo "Management IP $bc1_mgmt_ip entered"
+    else
+        echo "IP format incorrect"
+        exit 1
+    fi
+    read -r -p "Enter BC # 2 management IP address: " bc2_mgmt_ip 
+    if [[ "$bc2_mgmt_ip" =~ ^(([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))\.){3}([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))$ ]]; then
+        echo "Management IP $bc2_mgmt_ip entered"
+        echo "export TF_VAR_mgmt_ip='[\"$bc1_mgmt_ip\",\"$bc2_mgmt_ip\"]'" >> .zsecrc
+    else
+        echo "IP format incorrect"
+        exit 1
+    fi
+    if [[ "$dtype" == *"ac" ]]; then
+    read -r -p "Enter BC #1 Control IP address: " bc1_control_ip 
+    if [[ "$bc1_control_ip" =~ ^(([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))\.){3}([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))$ ]]; then
+        echo "Management IP $bc1_control_ip entered"
+    else
+        echo "IP format incorrect"
+        exit 1
+    fi
+    read -r -p "Enter BC #2 Control IP address: " bc2_control_ip
+    if [[ "$bc2_control_ip" =~ ^(([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))\.){3}([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))$ ]]; then
+        echo "Management IP $bc2_control_ip entered"
+        echo "export TF_VAR_control_ip='[\"$bc1_control_ip\",\"$bc2_control_ip\"]'" >> .zsecrc
+    else
+        echo "IP format incorrect"
+        exit 1
+    fi 
+    fi
+    read -r -p "Enter Netmask: " netmask
+    echo "export TF_VAR_mgmt_netmask='$netmask'" >> .zsecrc
+    if [[ "$dtype" == *"ac" ]]; then
+    echo "export TF_VAR_control_netmask='$netmask'" >> .zsecrc
+    fi
+    read -r -p "Enter Default Gateway: " gateway
+    echo "export TF_VAR_mgmt_gateway='$gateway'" >> .zsecrc
+    if [[ "$dtype" == *"ac" ]]; then
+    echo "export TF_VAR_control_gateway='$gateway'" >> .zsecrc
+    fi
+    read -r -p "Enter Primary DNS Server IP: " dns_primary
+    read -r -p "Enter Secondary DNS Server IP: " dns_secondary
+    echo "export TF_VAR_dns_servers='[\"$dns_primary\",\"$dns_secondary\"]'" >> .zsecrc
+    read -r -p "Enter DNS suffix (e.g. corp.com): " dns_suffix
+    echo "export TF_VAR_dns_suffix='$dns_suffix'" >> .zsecrc
+    if [[ "$network_adapter_type" == "e1000" ]]; then
+    echo "setting interfaces to em0"
+    echo "export TF_VAR_mgmt_name=em0" >> .zsecrc
+    elif [[ "$network_adapter_type" == "vmxnet3" ]]; then
+    echo "setting interfaces to vmx0"
+    echo "export TF_VAR_mgmt_name=vmx0" >> .zsecrc
+    fi
+    read -r -p "Enter BC #1 Provisioning URL (E.g. connector.zscalerbeta.net/api/v1/provUrl?name=vm1_esxi_test): " bc1_vm_prov_url
+    echo "Provisioning URL entered is: $bc1_vm_prov_url. Make sure this matches the BC Instance Size $bc_instance_size chosen."
+    read -r -p "Enter BC #2 Provisioning URL (E.g. connector.zscalerbeta.net/api/v1/provUrl?name=vm2_esxi_test): " bc2_vm_prov_url
+    echo "Provisioning URL entered is: $bc2_vm_prov_url. Make sure this matches the BC Instance Size $bc_instance_size chosen."
+    echo "export TF_VAR_bc_vm_prov_url='[\"$bc1_vm_prov_url\",\"$bc2_vm_prov_url\"]'" >> .zsecrc
+    read -r -p "Enter BC provisioning Username: " bc_username
+    echo "export TF_VAR_bc_username=${bc_username}" >> .zsecrc
+    read -r -p "Enter BC provisioning Password: " bc_password
+    echo "export TF_VAR_bc_password=${bc_password}" >> .zsecrc
+    read -r -p "Enter BC API Key: " bc_api_key
+    echo "export TF_VAR_bc_api_key=${bc_api_key}" >> .zsecrc
+
+elif [[ "$network_static" == "n"* ]]; then
+    if [[ "$dtype" == *"ha"* ]]; then
+    read -r -p "Enter BC #1 Provisioning URL (E.g. connector.zscalerbeta.net/api/v1/provUrl?name=vm1_esxi_test): " bc1_vm_prov_url
+    echo "Provisioning URL entered is: $bc1_vm_prov_url. Make sure this matches the BC Instance Size $bc_instance_size chosen."
+    read -r -p "Enter BC #2 Provisioning URL (E.g. connector.zscalerbeta.net/api/v1/provUrl?name=vm2_esxi_test): " bc2_vm_prov_url
+    echo "Provisioning URL entered is: $bc2_vm_prov_url. Make sure this matches the BC Instance Size $bc_instance_size chosen."
+    echo "export TF_VAR_bc_vm_prov_url='[\"$bc1_vm_prov_url\",\"$bc2_vm_prov_url\"]'" >> .zsecrc
+    elif [[ "$dtype" != *"ha"* ]]; then
+    read -r -p "Enter BC Provisioning URL (E.g. connector.zscalerbeta.net/api/v1/provUrl?name=esxi_test): " bc1_vm_prov_url
+    echo "Provisioning URL entered is: $bc1_vm_prov_url. Make sure this matches the BC Instance Size $bc_instance_size chosen."
+    echo "export TF_VAR_bc_vm_prov_url='[\"$bc1_vm_prov_url\"]'" >> .zsecrc
+    fi
+    read -r -p "Enter BC provisioning Username: " bc_username
+    echo "export TF_VAR_bc_username=${bc_username}" >> .zsecrc
+    read -r -p "Enter BC provisioning Password: " bc_password
+    echo "export TF_VAR_bc_password=${bc_password}" >> .zsecrc
+    read -r -p "Enter BC API Key: " bc_api_key
+    echo "export TF_VAR_bc_api_key=${bc_api_key}" >> .zsecrc
+fi
+    read -r -p "Enter name of the vCenter datacenter: " datacenter
+    echo "export TF_VAR_datacenter='$datacenter'" >> .zsecrc
+
+while true; do
+    read -r -p "Are you deploying to a compute cluster? (yes/no): " compute_cluster_response
+    case $compute_cluster_response in
+    yes|y )
+    if [[ "$dtype" == *"ha"* ]]; then
+    read -r -p "Enter BC #1 compute cluster name: " bc1_compute_cluster_name
+    echo "Compute cluster name $bc1_compute_cluster_name entered for BC #1..."
+    read -r -p "Enter BC #2 compute cluster name: " bc2_compute_cluster_name
+    echo "Compute cluster name $bc2_compute_cluster_name entered for BC #2..."
+    echo "export TF_VAR_compute_cluster_name='[\"$bc1_compute_cluster_name\",\"$bc2_compute_cluster_name\"]'" >> .zsecrc
+    echo "export TF_VAR_compute_cluster_enabled=true" >> .zsecrc
+    elif [[ "$dtype" != *"ha"* ]]; then
+    read -r -p "Enter compute cluster name: " compute_cluster_name
+    echo "export TF_VAR_compute_cluster_name='[\"$compute_cluster_name\"]'" >> .zsecrc
+    echo "export TF_VAR_compute_cluster_enabled=true" >> .zsecrc
+    fi
+    break
+    ;;
+    no|n )
+    echo "Standalone Host deployment selected..."
+    echo "export TF_VAR_compute_cluster_enabled=false" >> .zsecrc
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+    esac
+done
+
+if [[ "$dtype" == *"ha"* ]]; then
+    read -r -p "Enter BC # 1 ESXi host name or IP address: " bc1_host_name
+    echo "Host name $bc1_host_name entered for BC #1..."
+    read -r -p "Enter BC # 2 ESXi host name or IP address: " bc2_host_name
+    echo "Host name $bc2_host_name entered for BC #2..."
+    echo "export TF_VAR_host_name='[\"$bc1_host_name\",\"$bc2_host_name\"]'" >> .zsecrc
+elif [[ "$dtype" != *"ha"* ]]; then
+    read -r -p "Enter the ESXi host name or IP address: " host_name
+    echo "export TF_VAR_host_name='[\"$host_name\"]'" >> .zsecrc
+fi
+
+while true; do
+    read -r -p "Are you deploying to a datastore cluster aka storage pod? (yes/no): " datastore_cluster_response
+    case $datastore_cluster_response in
+    yes|y )
+    if [[ "$dtype" == *"ha"* ]]; then
+    read -r -p "Enter BC #1 datastore cluster name: " bc1_datastore_cluster
+    echo "Datastore cluster name $bc1_datastore_cluster entered for BC #1..."
+    read -r -p "Enter BC #2 datastore cluster name: " bc2_datastore_cluster
+    echo "Datastore cluster name $bc2_datastore_cluster entered for BC #2..."
+    echo "export TF_VAR_datastore_cluster='[\"$bc1_datastore_cluster\",\"$bc2_datastore_cluster\"]'" >> .zsecrc
+    echo "export TF_VAR_datastore_cluster_enabled=true" >> .zsecrc
+    elif [[ "$dtype" != *"ha"* ]]; then
+    read -r -p "Enter datastore cluster name: " datastore_cluster
+    echo "export TF_VAR_datastore_cluster='[\"$datastore_cluster\"]'" >> .zsecrc
+    echo "export TF_VAR_datastore_cluster_enabled=true" >> .zsecrc
+    fi
+    break
+    ;;
+    no|n )
+    if [[ "$dtype" == *"ha"* ]]; then
+    read -r -p "Enter BC #1 non-cluster datastore name: " bc1_datastore
+    echo "Datastore name $bc1_datastore entered for BC #1..."
+    read -r -p "Enter BC #2 non-cluster datastore name: " bc2_datastore
+    echo "Datastore name $bc2_datastore entered for BC #2..."
+    echo "export TF_VAR_datastore='[\"$bc1_datastore\",\"$bc2_datastore\"]'" >> .zsecrc
+    elif [[ "$dtype" != *"ha"* ]]; then
+    read -r -p "Enter non-cluster datastore name: " datastore
+    echo "export TF_VAR_datastore='[\"$datastore\"]'" >> .zsecrc
+    echo "export TF_VAR_datastore_cluster_enabled=false" >> .zsecrc
+    fi
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+    esac
+done
+
+while true; do
+    read -r -p "Are you deploying to a custom resource pool? (yes/no): " resource_pool_response
+    case $resource_pool_response in
+    yes|y )
+    if [[ "$dtype" == *"ha"* ]]; then
+    read -r -p "Enter BC #1 resource pool name: " bc1_resource_pool_name
+    echo "Resource pool name $bc1_resource_pool_name entered for BC #1..."
+    read -r -p "Enter BC #2 resource pool name: " bc2_resource_pool_name
+    echo "Resource pool name $bc2_resource_pool_name entered for BC #2..."
+    echo "export TF_VAR_resource_pool_name='[\"$bc1_resource_pool_name\",\"$bc2_resource_pool_name\"]'" >> .zsecrc
+    elif [[ "$dtype" != *"ha"* ]]; then
+    read -r -p "Enter resource pool name: " resource_pool_name
+    echo "export TF_VAR_resource_pool_name='[\"$resource_pool_name\"]'" >> .zsecrc
+    fi
+    break
+    ;;
+    no|n )
+    echo "Deployment will use vSphere default resource pools..."
+    break
+    ;;
+	* ) echo "invalid response. Please enter yes or no";;
+    esac
+done
+fi
+
+# add local bin directory to PATH
+if ! grep -Fxq "export PATH=\${PATH}:\${PWD}/bin" .zsecrc; then
+    echo 'export PATH=${PATH}:${PWD}/bin' >> .zsecrc
+fi
+
+# add deployment type to .zsecrc for future runs
+if [[ "$oper" == "up" ]]; then
+    echo "Updating .zsecrc with dtype of $dtype"
+    sed -i'' -e '/dtype/d' .zsecrc
+    echo "export dtype=${dtype}" >> .zsecrc
+fi
+
+# initialize environment variables
+. ./.zsecrc
+
+# check for valid environment variables in .zsecrc
+if [ -z "$VSPHERE_USER" ] || [ -z "$VSPHERE_PASSWORD" ] || [ -z "$VSPHERE_SERVER" ]; then
+    echo "ESXi Access info is missing. Remove .zsecrc file and rerun $0 $1"
+    exit 1
+fi
+
+echo "Download terraform binary for $ostype if not present..."
+if [[ ! -e ./$dir/terraform ]]; then
+    curl -o ./$dir/terraform_${tversion}_${arch}.zip https://releases.hashicorp.com/terraform/$tversion/terraform_${tversion}_${os_str}_${arch}.zip
+    unzip ./$dir/terraform_${tversion}_${arch}.zip -d ./$dir
+    rm -f ./$dir/terraform_${tversion}_${arch}.zip
+fi
+
+if [[ "$oper" == "do" ]]; then
+    exit 1
+fi
+
+if [[ "$oper" == "up" ]]; then
+    echo "Bringing up Branch Connector..."
+    TF_DATA_DIR=../.terraform ./$dir/terraform -chdir="$dtype" init
+    if [[ "$AUTO_APPROVE" ]]; then
+        TF_DATA_DIR=../.terraform ./$dir/terraform -chdir="$dtype" apply -auto-approve
+    else
+        TF_DATA_DIR=../.terraform ./$dir/terraform -chdir="$dtype" apply
+    fi
+   
+
+elif [[ "$oper" == "destroy" ]]; then
+    echo "Destroying Branch Connector..."
+    TF_DATA_DIR=../.terraform ./$dir/terraform -chdir="$dtype" init
+    if [[ "$AUTO_APPROVE" ]]; then
+      TF_DATA_DIR=../.terraform ./$dir/terraform -chdir="$dtype" destroy -auto-approve
+    else
+      TF_DATA_DIR=../.terraform ./$dir/terraform -chdir="$dtype" destroy -compact-warnings
+    fi
+    echo "Removing Terraform files and directories..."
+    rm -rf bin 
+    rm -rf **/.terraform/* && rm -rf **/.terraform*
+	find . -type f -name '.terraform.lock.hcl' -delete
+    rm -rf .terraform* && rm -f terraform.tfstate*
+    rm -f *.pem && rm -f *.pem.pub
+    rm -f name_prefix random_string
+    rm -rf user.key user.crt
+    rm -rf systems.json setup-*.tar
+    rm -rf **/errorlog.txt
+now=$(date +'%Y-%m-%d-%H_%M_%S')
+    echo "archiving .zsecrc file to .zsecrc-${now}"
+    cp .zsecrc .zsecrc-${now}
+    rm -rf .zsecrc && rm -rf .zsecrc.bak
+fi
