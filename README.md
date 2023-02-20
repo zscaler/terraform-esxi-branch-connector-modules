@@ -58,8 +58,8 @@ Use the [**Starter Deployment Template with App Connector**](examples/bc_ac) to 
 
 ### **Starter Deployment Template with High-Availability**
 
-Use the [**Starter Deployment Template with High-Availability**](examples/base_ha) to deploy your Branch Connector in an existing ESXi environment. This template achieves high availability between two Branch Connectors.
+Use the [**Starter Deployment Template with High-Availability**](examples/bc_ha) to deploy your Branch Connector in an existing ESXi environment. This template achieves high availability between two Branch Connectors.
 
 ### **Starter Deployment Template with App Connector and High-Availability**
 
-Use the [**Starter Deployment Template with App Connector and High-Availability**](examples/base_ha_ac) to deploy your combined Branch Connector + App Connector in an existing ESXi environment. This template achieves high availability between two Branch Connectors.
+Use the [**Starter Deployment Template with App Connector and High-Availability**](examples/bc_ha_ac) to deploy your combined Branch Connector + App Connector in an existing ESXi environment. This template achieves high availability between two Branch Connectors.
