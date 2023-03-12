@@ -41,7 +41,6 @@ The OVF configuration maintains a configuration mapping to automatically create 
 | medium-vmxnet3          | medium                    | false               | vmxnet3                       | 4   | 8           | 128       | 4    |
 | medium-e1000-appc       | medium                    | true                | e1000                         | 6   | 32          | 128       | 5    |
 | medium-vmxnet3-appc     | medium                    | true                | vmxnet3                       | 6   | 32          | 128       | 5    |
-|                         |                           |                     |                               |     |             |           |      |
 
 
 ## Deploying the cluster
