@@ -14,16 +14,13 @@
 
 #bc_vm_prov_url                         = ["connector.zscaler.net/api/v1/provUrl?name=vsphere_prov_url"]
 
-
 ## 2. Zscaler provisioning user account
 
-#bc_username                            = "replace-with-bac-admin-name"
-
+#bc_username                            = "replace-with-bc-deployment-user"
 
 ## 3. Zscaler provisioning user password
 
-#bc_password                            = "replace-with-bac-admin-password"
-
+#bc_password                            = "replace-with-bc-deployment-password"
 
 ## 4. Zscaler Branch Connector API Key
 
@@ -122,18 +119,13 @@
 #####################################################################################################################
 
 ## 18. Disk Provisioning policy. The default is to enable thin provisioning at the disk and configure at the ovf template.
-##     If you want something other than thin provisioned, uncomment thin_provisioning_enabled and one of either "thick"
-##     or "flat" for disk_provisioning.
+##     Default: "thin"
 
-#thin_provisioned_enabled               = false
-
+#disk_provisioning                      = "thin"
 #disk_provisioning                      = "thick"
-#disk_provisioning                      = "flat"
+#disk_provisioning                      = "flat" 
 
+## 19. By default, Terraform will generate a new SSH Private/Public Key Pair that can be used to access the Branch Connector VM.
+##     Uncomment and enter an SSH Public Key if you would rather use your own and not create a new one.
 
-## 19. The SCSI controller type for the virtual machine. Default is lsilogic.
-##     Uncomment to select the desired configuration for your environment.
-
-#scsi_type                              = "lsilogic"
-#scsi_type                              = "lsilogic-sas"
-#scsi_type                              = "pvscsi"    
+#byo_ssh_key                            = "ssh-rsa AAAA etc"

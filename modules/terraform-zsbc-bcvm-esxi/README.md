@@ -1,7 +1,20 @@
 # Zscaler Branch Connector / VMware ESXi VM Module
 
-This module can be used to deploy a customized Zscaler Branch Connector VM from a local OVA template. It includes predefined vapp properties for a complete, zero-touch provisioning process.
+This module can be used to deploy a customized Zscaler Branch Connector VM from a local OVA/OVF template. It includes predefined vapp properties for a complete, zero-touch provisioning process.
 
+The OVF configuration maintains a configuration mapping to automatically create the required resource allocation for the BC VM. vSphere refers to this as a "DeploymentOption". Terraform maps to this based on three user defined variables (bc_instance_size, ac_enabled, and network_adapater_type). Please refer to the table below to understand which OVF Deployment Option (column one) will get utilized based on the variable inputs (columns 2,3,4).
+
+| (ovf) deployment option | (tf var) bc_instance_size | (tf var) ac_enabled | (tf var) network_adapter_type | CPU | Memory (GB) | Disk (GB) | NICs |
+|-------------------------|---------------------------|---------------------|-------------------------------|-----|-------------|-----------|------|
+| small-e1000             | small                     | false               | e1000                         | 2   | 4           | 128       | 2    |
+| small-vmxnet3           | small                     | false               | vmxnet3                       | 2   | 4           | 128       | 2    |
+| small-e1000-appc        | small                     | true                | e1000                         | 4   | 16          | 128       | 3    |
+| small-vmxnet3-appc      | small                     | true                | vmxnet3                       | 4   | 16          | 128       | 3    |
+| medium-e1000            | medium                    | false               | e1000                         | 4   | 8           | 128       | 4    |
+| medium-vmxnet3          | medium                    | false               | vmxnet3                       | 4   | 8           | 128       | 4    |
+| medium-e1000-appc       | medium                    | true                | e1000                         | 6   | 32          | 128       | 5    |
+| medium-vmxnet3-appc     | medium                    | true                | vmxnet3                       | 6   | 32          | 128       | 5    |
+|                         |                           |                     |                               |     |             |           |      |
 
 <!-- BEGINNING OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
 ## Requirements
@@ -32,6 +45,7 @@ No modules.
 | [vsphere_datastore_cluster.datastore_cluster](https://registry.terraform.io/providers/hashicorp/vsphere/latest/docs/data-sources/datastore_cluster) | data source |
 | [vsphere_host.host](https://registry.terraform.io/providers/hashicorp/vsphere/latest/docs/data-sources/host) | data source |
 | [vsphere_network.network](https://registry.terraform.io/providers/hashicorp/vsphere/latest/docs/data-sources/network) | data source |
+| [vsphere_ovf_vm_template.bc_ovf_local](https://registry.terraform.io/providers/hashicorp/vsphere/latest/docs/data-sources/ovf_vm_template) | data source |
 | [vsphere_resource_pool.pool](https://registry.terraform.io/providers/hashicorp/vsphere/latest/docs/data-sources/resource_pool) | data source |
 
 ## Inputs
@@ -56,7 +70,6 @@ No modules.
 | <a name="input_datastore_cluster"></a> [datastore\_cluster](#input\_datastore\_cluster) | Datastore cluster to deploy the VM. Use of datastore\_cluster\_id requires vSphere Storage DRS to be enabled on the specified datastore cluster. | `list(string)` | <pre>[<br>  ""<br>]</pre> | no |
 | <a name="input_datastore_cluster_enabled"></a> [datastore\_cluster\_enabled](#input\_datastore\_cluster\_enabled) | True/False to tell VM creation that the datastore is or is not part of a cluster. Default is false | `bool` | `false` | no |
 | <a name="input_disk_provisioning"></a> [disk\_provisioning](#input\_disk\_provisioning) | The disk provisioning policy. If set, all the disks included in the OVF/OVA will have the same specified policy. One of thin, flat, thick, or sameAsSource | `string` | `"thin"` | no |
-| <a name="input_disk_size"></a> [disk\_size](#input\_disk\_size) | size of disk 0 | `string` | `"128"` | no |
 | <a name="input_dns_servers"></a> [dns\_servers](#input\_dns\_servers) | Primary/Secondary DNS servers for BC management interface if statically setting via provisioning url. Leave blank if using DHCP | `list(string)` | <pre>[<br>  ""<br>]</pre> | no |
 | <a name="input_dns_suffix"></a> [dns\_suffix](#input\_dns\_suffix) | Primary DNS suffix for BC management interface if statically setting via provisioning url. Leave blank if using DHCP | `string` | `""` | no |
 | <a name="input_host_name"></a> [host\_name](#input\_host\_name) | (Optional) The managed object reference ID of a host on which to place the virtual machine. See the section on virtual machine migration for more information on modifying this value. When using a vSphere cluster, if a host\_system\_id is not supplied, vSphere will select a host in the cluster to place the virtual machine, according to any defaults or vSphere DRS placement policies | `list(string)` | n/a | yes |
@@ -69,9 +82,7 @@ No modules.
 | <a name="input_network_name"></a> [network\_name](#input\_network\_name) | Name of the vSphere network to deploy to | `string` | n/a | yes |
 | <a name="input_resource_pool_name"></a> [resource\_pool\_name](#input\_resource\_pool\_name) | Name of ESXi host resource group. If one is not specified, the VMware default name of 'Resources' is used | `list(string)` | <pre>[<br>  ""<br>]</pre> | no |
 | <a name="input_resource_tag"></a> [resource\_tag](#input\_resource\_tag) | A tag to associate to all the Branch Connector module resources | `string` | `""` | no |
-| <a name="input_scsi_type"></a> [scsi\_type](#input\_scsi\_type) | The SCSI controller type for the virtual machine | `string` | `"lsilogic"` | no |
 | <a name="input_ssh_key"></a> [ssh\_key](#input\_ssh\_key) | SSH Key for instances | `string` | `""` | no |
-| <a name="input_thin_provisioned_enabled"></a> [thin\_provisioned\_enabled](#input\_thin\_provisioned\_enabled) | Whether to thin provision the VM disk or not. Default is true | `bool` | `true` | no |
 | <a name="input_wait_for_guest_ip_timeout"></a> [wait\_for\_guest\_ip\_timeout](#input\_wait\_for\_guest\_ip\_timeout) | The amount of time, in minutes, to wait for an available guest IP address on the virtual machine. This should only be used if the version VMware Tools does not allow the wait\_for\_guest\_net\_timeout waiter to be used. A value less than 1 disables the waiter | `number` | `5` | no |
 | <a name="input_wait_for_guest_net_timeout"></a> [wait\_for\_guest\_net\_timeout](#input\_wait\_for\_guest\_net\_timeout) | The amount of time, in minutes, to wait for an available guest IP address on the virtual machine. Older versions of VMware Tools do not populate this property. In those cases, this waiter can be disabled and the wait\_for\_guest\_ip\_timeout waiter can be used instead | `number` | `0` | no |
 

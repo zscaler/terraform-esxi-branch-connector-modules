@@ -204,7 +204,7 @@ if [[ "$dtype" == *"ac" ]]; then
 	    yes|y ) 
         read -r -p "Enter the name of your existing App Connector provisioning key: " byo_provisioning_key_name
         echo "export TF_VAR_byo_provisioning_key=true" >> .zsecrc
-        echo "export TF_VAR_byo_provisioning_key_name=${byo_provisioning_key_name}" >> .zsecrc
+        echo "export TF_VAR_byo_provisioning_key_name='$byo_provisioning_key_name'" >> .zsecrc
         break
         ;;
 	    no|n )
@@ -223,12 +223,12 @@ while true; do
     bc_instance_size=${bc_instance_size_input:-$bc_instance_size_default}
     case $bc_instance_size in
       small|medium)
-          echo "Branch Connector size: ${bc_instance_size}"
-          echo "export TF_VAR_bc_instance_size=${bc_instance_size}" >> .zsecrc
+          echo "Branch Connector size: $bc_instance_size}"
+          echo "export TF_VAR_bc_instance_size='$bc_instance_size'" >> .zsecrc
           break
       ;;
       *)
-          echo "Invalid Branch Connector size: ${bc_instance_size}."
+          echo "Invalid Branch Connector size: $bc_instance_size."
       ;;
     esac
 done
@@ -240,6 +240,31 @@ elif [[ "$dtype" == *"ha"* ]]; then
     echo "Deployment type is $dtype. Input infrastructure details for two Branch Connectors..."
     echo "export TF_VAR_bc_count=2" >> .zsecrc
 fi    
+
+byo_ssh_key_default=no
+while true; do
+echo "By default, Terraform will generate a new SSH Private/Public Key Pair that can be used to access the Branch Connector..."
+read -r -p "Enter "yes" if you would like to supply your own SSH Public Key [Default=$byo_ssh_key_default]: " byo_ssh_key_input
+byo_ssh_key=${byo_ssh_key_input:-$byo_ssh_key_default}
+case $byo_ssh_key in 
+	    yes|y ) 
+        read -r -p "Paste the SSH Public Key here: " user_ssh_key
+            if ! [[ "$user_ssh_key" =~ ^(ssh-rsa AAAAB3NzaC1yc2|ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNT|ecdsa-sha2-nistp384 AAAAE2VjZHNhLXNoYTItbmlzdHAzODQAAAAIbmlzdHAzOD|ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1Mj|ssh-ed25519 AAAAC3NzaC1lZDI1NTE5|ssh-dss AAAAB3NzaC1kc3)[0-9A-Za-z+/]+[=]{0,3}( .*)?$ ]] 
+            then 
+                echo "SSH Key Pair entered is not valid. Please check format/spacing is correct starting with "ssh-rsa AAAA" and re-run ./zsec up" 
+                exit 1 
+            fi
+        echo "export TF_VAR_byo_ssh_key=$user_ssh_key" >> .zsecrc
+        break
+        ;;
+	    no|n )
+        echo "Terraform will generate a new SSH Key and write the file to this working directory..."
+        break
+        ;;
+	    * ) echo "invalid response. Please enter yes or no";;
+        esac
+    done
+    
 
 network_static_default=no
 while true; do
@@ -266,12 +291,12 @@ while true; do
     case $network_adapter_type in
     vmxnet3 )
     echo "Configuring interfaces as $network_adapter_type"
-    echo "export TF_VAR_network_adapter_type=$network_adapter_type" >> .zsecrc
+    echo "export TF_VAR_network_adapter_type='$network_adapter_type'" >> .zsecrc
     break
     ;;
     e1000 )
     echo "Configuring interfaces as $network_adapter_type"
-    echo "export TF_VAR_network_adapter_type=$network_adapter_type" >> .zsecrc
+    echo "export TF_VAR_network_adapter_type='$network_adapter_type'" >> .zsecrc
     break
     ;;
 	* ) echo "invalid response. Please enter vmxnet3 or e1000";;
@@ -313,22 +338,16 @@ if [[ "$network_static" == "y"* && "$dtype" != *"ha"* ]]; then
     echo "export TF_VAR_dns_servers='[\"$dns_primary\",\"$dns_secondary\"]'" >> .zsecrc
     read -r -p "Enter DNS suffix (e.g. corp.com): " dns_suffix
     echo "export TF_VAR_dns_suffix='$dns_suffix'" >> .zsecrc
-    if [[ "$network_adapter_type" == "e1000" ]]; then
-    echo "setting interfaces to em0"
-    echo "export TF_VAR_mgmt_name=em0" >> .zsecrc
-    elif [[ "$network_adapter_type" == "vmxnet3" ]]; then
-    echo "setting interfaces to vmx0"
-    echo "export TF_VAR_mgmt_name=vmx0" >> .zsecrc
-    fi
+    
     read -r -p "Enter BC Provisioning URL (E.g. connector.zscalerbeta.net/api/v1/provUrl?name=esxi_test): " bc1_vm_prov_url
     echo "Provisioning URL entered is: $bc1_vm_prov_url. Make sure this matches the BC Instance Size $bc_instance_size chosen."
     echo "export TF_VAR_bc_vm_prov_url='[\"$bc1_vm_prov_url\"]'" >> .zsecrc
     read -r -p "Enter BC provisioning Username: " bc_username
-    echo "export TF_VAR_bc_username=${bc_username}" >> .zsecrc
+    echo "export TF_VAR_bc_username='$bc_username'" >> .zsecrc
     read -r -p "Enter BC provisioning Password: " bc_password
-    echo "export TF_VAR_bc_password=${bc_password}" >> .zsecrc
+    echo "export TF_VAR_bc_password='$bc_password'" >> .zsecrc
     read -r -p "Enter BC API Key: " bc_api_key
-    echo "export TF_VAR_bc_api_key=${bc_api_key}" >> .zsecrc
+    echo "export TF_VAR_bc_api_key='$bc_api_key'" >> .zsecrc
 
 elif [[ "$network_static" == "y"* && "$dtype" == *"ha"* ]]; then
     echo "Configuring Branch Connector network information..."
@@ -379,24 +398,18 @@ elif [[ "$network_static" == "y"* && "$dtype" == *"ha"* ]]; then
     echo "export TF_VAR_dns_servers='[\"$dns_primary\",\"$dns_secondary\"]'" >> .zsecrc
     read -r -p "Enter DNS suffix (e.g. corp.com): " dns_suffix
     echo "export TF_VAR_dns_suffix='$dns_suffix'" >> .zsecrc
-    if [[ "$network_adapter_type" == "e1000" ]]; then
-    echo "setting interfaces to em0"
-    echo "export TF_VAR_mgmt_name=em0" >> .zsecrc
-    elif [[ "$network_adapter_type" == "vmxnet3" ]]; then
-    echo "setting interfaces to vmx0"
-    echo "export TF_VAR_mgmt_name=vmx0" >> .zsecrc
-    fi
+    
     read -r -p "Enter BC #1 Provisioning URL (E.g. connector.zscalerbeta.net/api/v1/provUrl?name=vm1_esxi_test): " bc1_vm_prov_url
     echo "Provisioning URL entered is: $bc1_vm_prov_url. Make sure this matches the BC Instance Size $bc_instance_size chosen."
     read -r -p "Enter BC #2 Provisioning URL (E.g. connector.zscalerbeta.net/api/v1/provUrl?name=vm2_esxi_test): " bc2_vm_prov_url
     echo "Provisioning URL entered is: $bc2_vm_prov_url. Make sure this matches the BC Instance Size $bc_instance_size chosen."
     echo "export TF_VAR_bc_vm_prov_url='[\"$bc1_vm_prov_url\",\"$bc2_vm_prov_url\"]'" >> .zsecrc
     read -r -p "Enter BC provisioning Username: " bc_username
-    echo "export TF_VAR_bc_username=${bc_username}" >> .zsecrc
+    echo "export TF_VAR_bc_username='$bc_username'" >> .zsecrc
     read -r -p "Enter BC provisioning Password: " bc_password
-    echo "export TF_VAR_bc_password=${bc_password}" >> .zsecrc
+    echo "export TF_VAR_bc_password='$bc_password'" >> .zsecrc
     read -r -p "Enter BC API Key: " bc_api_key
-    echo "export TF_VAR_bc_api_key=${bc_api_key}" >> .zsecrc
+    echo "export TF_VAR_bc_api_key='$bc_api_key'" >> .zsecrc
 
 elif [[ "$network_static" == "n"* ]]; then
     if [[ "$dtype" == *"ha"* ]]; then
@@ -411,11 +424,11 @@ elif [[ "$network_static" == "n"* ]]; then
     echo "export TF_VAR_bc_vm_prov_url='[\"$bc1_vm_prov_url\"]'" >> .zsecrc
     fi
     read -r -p "Enter BC provisioning Username: " bc_username
-    echo "export TF_VAR_bc_username=${bc_username}" >> .zsecrc
+    echo "export TF_VAR_bc_username='$bc_username'" >> .zsecrc
     read -r -p "Enter BC provisioning Password: " bc_password
-    echo "export TF_VAR_bc_password=${bc_password}" >> .zsecrc
+    echo "export TF_VAR_bc_password='$bc_password'" >> .zsecrc
     read -r -p "Enter BC API Key: " bc_api_key
-    echo "export TF_VAR_bc_api_key=${bc_api_key}" >> .zsecrc
+    echo "export TF_VAR_bc_api_key='$bc_api_key'" >> .zsecrc
 fi
     read -r -p "Enter name of the vCenter datacenter: " datacenter
     echo "export TF_VAR_datacenter='$datacenter'" >> .zsecrc
