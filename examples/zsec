@@ -254,7 +254,7 @@ case $byo_ssh_key in
                 echo "SSH Key Pair entered is not valid. Please check format/spacing is correct starting with "ssh-rsa AAAA" and re-run ./zsec up" 
                 exit 1 
             fi
-        echo "export TF_VAR_byo_ssh_key=$user_ssh_key" >> .zsecrc
+        echo "export TF_VAR_byo_ssh_key='$user_ssh_key'" >> .zsecrc
         break
         ;;
 	    no|n )
