@@ -5,7 +5,7 @@ This module can be used to deploy a customized Zscaler Branch Connector VM from 
 The OVF configuration maintains a configuration mapping to automatically create the required resource allocation for the BC VM. vSphere refers to this as a "DeploymentOption". Terraform maps to this based on three user defined variables (bc_instance_size, ac_enabled, and network_adapater_type). Please refer to the table below to understand which OVF Deployment Option (column one) will get utilized based on the variable inputs (columns 2,3,4).
 
 | (ovf) deployment option | (tf var) bc_instance_size | (tf var) ac_enabled | (tf var) network_adapter_type | CPU | Memory (GB) | Disk (GB) | NICs |
-|-------------------------|---------------------------|---------------------|-------------------------------|-----|-------------|-----------|------|
+|:-----------------------:|:-------------------------:|:-------------------:|:-----------------------------:|:---:|:-----------:|:---------:|:----:|
 | small-e1000             | small                     | false               | e1000                         | 2   | 4           | 128       | 2    |
 | small-vmxnet3           | small                     | false               | vmxnet3                       | 2   | 4           | 128       | 2    |
 | small-e1000-appc        | small                     | true                | e1000                         | 4   | 16          | 128       | 3    |
@@ -14,6 +14,7 @@ The OVF configuration maintains a configuration mapping to automatically create 
 | medium-vmxnet3          | medium                    | false               | vmxnet3                       | 4   | 8           | 128       | 4    |
 | medium-e1000-appc       | medium                    | true                | e1000                         | 6   | 32          | 128       | 5    |
 | medium-vmxnet3-appc     | medium                    | true                | vmxnet3                       | 6   | 32          | 128       | 5    |
+
 
 <!-- BEGINNING OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
 ## Requirements
