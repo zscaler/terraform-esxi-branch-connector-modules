@@ -51,18 +51,6 @@ variable "host_name" {
   description = "(Optional) The managed object reference ID of a host on which to place the virtual machine. See the section on virtual machine migration for more information on modifying this value. When using a vSphere cluster, if a host_system_id is not supplied, vSphere will select a host in the cluster to place the virtual machine, according to any defaults or vSphere DRS placement policies"
 }
 
-variable "disk_size" {
-  type        = string
-  description = "size of disk 0"
-  default     = "128"
-}
-
-variable "thin_provisioned_enabled" {
-  type        = bool
-  description = "Whether to thin provision the VM disk or not. Default is true"
-  default     = true
-}
-
 variable "disk_provisioning" {
   type        = string
   description = "The disk provisioning policy. If set, all the disks included in the OVF/OVA will have the same specified policy. One of thin, flat, thick, or sameAsSource"
@@ -78,21 +66,6 @@ variable "disk_provisioning" {
   }
 }
 
-variable "scsi_type" {
-  type        = string
-  description = "The SCSI controller type for the virtual machine"
-  default     = "lsilogic"
-
-  validation {
-    condition = (
-      var.scsi_type == "lsilogic" ||
-      var.scsi_type == "lsilogic-sas" ||
-      var.scsi_type == "pvscsi"
-    )
-    error_message = "Input scsi_type must be set to a supported value."
-  }
-}
-
 variable "network_name" {
   type        = string
   description = "Name of the vSphere network to deploy to"
@@ -102,6 +75,13 @@ variable "network_adapter_type" {
   type        = string
   description = "The network interface type. Supported types are e1000 or vmxnet3. Default is vmxnet3"
   default     = "vmxnet3"
+  validation {
+    condition = (
+      var.network_adapter_type == "e1000" ||
+      var.network_adapter_type == "vmxnet3"
+    )
+    error_message = "Input network_adapter_type must be set to an approved value."
+  }
 }
 
 variable "bc_instance_size" {
@@ -111,8 +91,7 @@ variable "bc_instance_size" {
   validation {
     condition = (
       var.bc_instance_size == "small" ||
-      var.bc_instance_size == "medium" ||
-      var.bc_instance_size == "large"
+      var.bc_instance_size == "medium"
     )
     error_message = "Input bc_instance_size must be set to an approved value."
   }
@@ -126,38 +105,26 @@ variable "ac_enabled" {
 
 #Locals matrix to define the number of vNICs to assign to a VM given any combination of size/features
 locals {
-  small_bc_nic     = var.bc_instance_size == "small" && var.ac_enabled == false ? 2 : ""
-  small_bc_ac_nic  = var.bc_instance_size == "small" && var.ac_enabled == true ? 3 : ""
-  medium_bc_nic    = var.bc_instance_size == "medium" && var.ac_enabled == false ? 4 : ""
-  medium_bc_ac_nic = var.bc_instance_size == "medium" && var.ac_enabled == true ? 5 : ""
-  large_bc_nic     = var.bc_instance_size == "large" && var.ac_enabled == false ? 5 : ""
-  large_bc_ac_nic  = var.bc_instance_size == "large" && var.ac_enabled == true ? 6 : ""
+  small_bc_nic     = var.bc_instance_size == "small" && var.ac_enabled == false ? ["1", "2"] : []
+  small_bc_ac_nic  = var.bc_instance_size == "small" && var.ac_enabled == true ? ["1", "2", "3"] : []
+  medium_bc_nic    = var.bc_instance_size == "medium" && var.ac_enabled == false ? ["1", "2", "3", "4"] : []
+  medium_bc_ac_nic = var.bc_instance_size == "medium" && var.ac_enabled == true ? ["1", "2", "3", "4", "5"] : []
 
-  vm_nic_count = coalesce(local.small_bc_nic, local.small_bc_ac_nic, local.medium_bc_nic, local.medium_bc_ac_nic, local.large_bc_nic, local.large_bc_ac_nic)
+  vm_nic_count = coalescelist(local.small_bc_nic, local.small_bc_ac_nic, local.medium_bc_nic, local.medium_bc_ac_nic)
 }
 
-#Locals matrix to define the number of vCPU to assign to a VM given any combination of size/features
+#Locals matrix to define the deployment type based on bc_instance_size, network_adapter_type and ac_enabled configuration
 locals {
-  small_bc_cpu     = var.bc_instance_size == "small" && var.ac_enabled == false ? 2 : ""
-  small_bc_ac_cpu  = var.bc_instance_size == "small" && var.ac_enabled == true ? 4 : ""
-  medium_bc_cpu    = var.bc_instance_size == "medium" && var.ac_enabled == false ? 4 : ""
-  medium_bc_ac_cpu = var.bc_instance_size == "medium" && var.ac_enabled == true ? 8 : ""
-  large_bc_cpu     = var.bc_instance_size == "large" && var.ac_enabled == false ? 6 : ""
-  large_bc_ac_cpu  = var.bc_instance_size == "large" && var.ac_enabled == true ? 10 : ""
+  small_e1000         = var.bc_instance_size == "small" && var.ac_enabled == false && var.network_adapter_type == "e1000" ? "small-e1000" : ""
+  small_vmxnet3       = var.bc_instance_size == "small" && var.ac_enabled == false && var.network_adapter_type == "vmxnet3" ? "small-vmxnet3" : ""
+  small_e1000_appc    = var.bc_instance_size == "small" && var.ac_enabled == true && var.network_adapter_type == "e1000" ? "small-e1000-appc" : ""
+  small_vmxnet3_appc  = var.bc_instance_size == "small" && var.ac_enabled == true && var.network_adapter_type == "vmxnet3" ? "small-vmxnet3-appc" : ""
+  medium_e1000        = var.bc_instance_size == "medium" && var.ac_enabled == false && var.network_adapter_type == "e1000" ? "medium-e1000" : ""
+  medium_vmxnet3      = var.bc_instance_size == "medium" && var.ac_enabled == false && var.network_adapter_type == "vmxnet3" ? "medium-vmxnet3" : ""
+  medium_e1000_appc   = var.bc_instance_size == "medium" && var.ac_enabled == true && var.network_adapter_type == "e1000" ? "medium-e1000-appc" : ""
+  medium_vmxnet3_appc = var.bc_instance_size == "medium" && var.ac_enabled == true && var.network_adapter_type == "vmxnet3" ? "medium-vmxnet3-appc" : ""
 
-  vm_cpus = coalesce(local.small_bc_cpu, local.small_bc_ac_cpu, local.medium_bc_cpu, local.medium_bc_ac_cpu, local.large_bc_cpu, local.large_bc_ac_cpu)
-}
-
-#Locals matrix to define the amount of memory to assign to a VM given any combination of size/features
-locals {
-  small_bc_mem     = var.bc_instance_size == "small" && var.ac_enabled == false ? 4096 : ""
-  small_bc_ac_mem  = var.bc_instance_size == "small" && var.ac_enabled == true ? 16384 : ""
-  medium_bc_mem    = var.bc_instance_size == "medium" && var.ac_enabled == false ? 8192 : ""
-  medium_bc_ac_mem = var.bc_instance_size == "medium" && var.ac_enabled == true ? 24576 : ""
-  large_bc_mem     = var.bc_instance_size == "large" && var.ac_enabled == false ? 16384 : ""
-  large_bc_ac_mem  = var.bc_instance_size == "large" && var.ac_enabled == true ? 32768 : ""
-
-  vm_memory = coalesce(local.small_bc_mem, local.small_bc_ac_mem, local.medium_bc_mem, local.medium_bc_ac_mem, local.large_bc_mem, local.large_bc_ac_mem)
+  deployment_option = coalesce(local.small_e1000, local.small_vmxnet3, local.small_e1000_appc, local.small_vmxnet3_appc, local.medium_e1000, local.medium_vmxnet3, local.medium_e1000_appc, local.medium_vmxnet3_appc)
 }
 
 variable "local_ovf_path" {

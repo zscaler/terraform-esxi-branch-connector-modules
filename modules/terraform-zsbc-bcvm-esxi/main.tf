@@ -18,7 +18,6 @@ data "vsphere_datastore" "datastore" {
 }
 
 data "vsphere_network" "network" {
-  count         = local.vm_nic_count
   name          = var.network_name
   datacenter_id = data.vsphere_datacenter.datacenter.id
 }
@@ -37,6 +36,23 @@ data "vsphere_resource_pool" "pool" {
 
 
 ################################################################################
+# Generate VM Template from Local OVF/OVA Source
+################################################################################
+data "vsphere_ovf_vm_template" "bc_ovf_local" {
+  count             = var.bc_count
+  name              = "${var.name_prefix}-bc-${count.index + 1}-ovf-template-${var.resource_tag}"
+  disk_provisioning = var.disk_provisioning
+  resource_pool_id  = element(data.vsphere_resource_pool.pool[*].id, count.index)
+  datastore_id      = element(data.vsphere_datastore.datastore[*].id, count.index)
+  host_system_id    = element(data.vsphere_host.host[*].id, count.index)
+  local_ovf_path    = var.local_ovf_path
+  deployment_option = local.deployment_option
+  ovf_network_map = {
+    "VM Network" : data.vsphere_network.network.id
+  }
+}
+
+################################################################################
 # Create Virtual Machine resources
 ################################################################################
 resource "vsphere_virtual_machine" "bc_vm" {
@@ -45,33 +61,31 @@ resource "vsphere_virtual_machine" "bc_vm" {
   datastore_cluster_id       = var.datastore_cluster_enabled == true ? element(data.vsphere_datastore_cluster.datastore_cluster[*].id, count.index) : null
   datastore_id               = var.datastore_cluster_enabled == false ? element(data.vsphere_datastore.datastore[*].id, count.index) : null
   resource_pool_id           = element(data.vsphere_resource_pool.pool[*].id, count.index)
-  num_cpus                   = local.vm_cpus
-  memory                     = local.vm_memory
+  num_cpus                   = element(data.vsphere_ovf_vm_template.bc_ovf_local[*].num_cpus, count.index)
+  num_cores_per_socket       = element(data.vsphere_ovf_vm_template.bc_ovf_local[*].num_cores_per_socket, count.index)
+  memory                     = element(data.vsphere_ovf_vm_template.bc_ovf_local[*].memory, count.index)
   datacenter_id              = data.vsphere_datacenter.datacenter.id
   host_system_id             = element(data.vsphere_host.host[*].id, count.index)
-  scsi_type                  = var.scsi_type
+  guest_id                   = element(data.vsphere_ovf_vm_template.bc_ovf_local[*].guest_id, count.index)
+  scsi_type                  = element(data.vsphere_ovf_vm_template.bc_ovf_local[*].scsi_type, count.index)
+  nested_hv_enabled          = element(data.vsphere_ovf_vm_template.bc_ovf_local[*].nested_hv_enabled, count.index)
   wait_for_guest_net_timeout = var.wait_for_guest_net_timeout
   wait_for_guest_ip_timeout  = var.wait_for_guest_ip_timeout
 
-  disk {
-    label            = "disk0"
-    size             = var.disk_size
-    thin_provisioned = var.thin_provisioned_enabled
-
-  }
-
   dynamic "network_interface" {
-    for_each = data.vsphere_network.network[*].id
+    for_each = local.vm_nic_count
     content {
-      network_id   = network_interface.value
+      network_id   = data.vsphere_network.network.id
       adapter_type = var.network_adapter_type
     }
   }
 
   ovf_deploy {
-    local_ovf_path    = var.local_ovf_path
-    disk_provisioning = var.disk_provisioning
+    local_ovf_path    = element(data.vsphere_ovf_vm_template.bc_ovf_local[*].local_ovf_path, count.index)
+    disk_provisioning = element(data.vsphere_ovf_vm_template.bc_ovf_local[*].disk_provisioning, count.index)
     ip_protocol       = "IPv4"
+    deployment_option = local.deployment_option
+    ovf_network_map   = element(data.vsphere_ovf_vm_template.bc_ovf_local[*].ovf_network_map, count.index)
   }
 
   dynamic "vapp" {
@@ -96,6 +110,7 @@ resource "vsphere_virtual_machine" "bc_vm" {
       }
     }
   }
+
   dynamic "vapp" {
     for_each = var.ac_enabled ? [] : ["1"]
 

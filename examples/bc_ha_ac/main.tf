@@ -16,12 +16,14 @@ resource "random_string" "suffix" {
 ################################################################################
 # private key for login
 resource "tls_private_key" "key" {
+  count     = var.byo_ssh_key == "" ? 1 : 0
   algorithm = var.tls_key_algorithm
 }
 
 # write private key to local pem file
 resource "local_file" "private_key" {
-  content         = tls_private_key.key.private_key_pem
+  count           = var.byo_ssh_key == "" ? 1 : 0
+  content         = tls_private_key.key[0].private_key_pem
   filename        = "../${var.name_prefix}-key-${random_string.suffix.result}.pem"
   file_permission = "0600"
 }
@@ -44,10 +46,7 @@ module "bc_vm" {
   compute_cluster_enabled   = var.compute_cluster_enabled
   compute_cluster_name      = var.compute_cluster_name
   host_name                 = var.host_name
-  disk_size                 = var.disk_size
-  thin_provisioned_enabled  = var.thin_provisioned_enabled
   local_ovf_path            = fileexists("bootstrap/${var.ova_name}") ? "${abspath(path.root)}/bootstrap/${var.ova_name}" : "OVA file name and/or path is wrong. Please fix and re-run terraform"
-  scsi_type                 = var.scsi_type
   network_adapter_type      = var.network_adapter_type
   bc_instance_size          = var.bc_instance_size
   network_name              = var.network_name
@@ -61,7 +60,7 @@ module "bc_vm" {
   mgmt_gateway              = var.mgmt_gateway
   dns_servers               = var.dns_servers
   dns_suffix                = var.dns_suffix
-  ssh_key                   = tls_private_key.key.public_key_openssh
+  ssh_key                   = try(tls_private_key.key[0].public_key_openssh, var.byo_ssh_key)
   ac_enabled                = var.ac_enabled
   ac_prov_key               = module.zpa_provisioning_key.provisioning_key
   control_ip                = var.control_ip

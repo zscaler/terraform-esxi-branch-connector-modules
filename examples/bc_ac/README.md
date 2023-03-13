@@ -93,6 +93,7 @@ From bc_ac directory execute:
 | <a name="input_bc_vm_prov_url"></a> [bc\_vm\_prov\_url](#input\_bc\_vm\_prov\_url) | Zscaler Branch Connector Provisioning URL | `list(string)` | <pre>[<br>  ""<br>]</pre> | no |
 | <a name="input_byo_provisioning_key"></a> [byo\_provisioning\_key](#input\_byo\_provisioning\_key) | Bring your own App Connector Provisioning Key. Setting this variable to true will effectively instruct this module to not create any resources and only reference data resources from values provided in byo\_provisioning\_key\_name | `bool` | `false` | no |
 | <a name="input_byo_provisioning_key_name"></a> [byo\_provisioning\_key\_name](#input\_byo\_provisioning\_key\_name) | Existing App Connector Provisioning Key name | `string` | `"provisioning-key-tf"` | no |
+| <a name="input_byo_ssh_key"></a> [byo\_ssh\_key](#input\_byo\_ssh\_key) | user entered SSH Public Key | `string` | `""` | no |
 | <a name="input_compute_cluster_enabled"></a> [compute\_cluster\_enabled](#input\_compute\_cluster\_enabled) | True/False to tell VM creation that the resource pool is or is not part of a compute cluster. Default is false | `bool` | `false` | no |
 | <a name="input_compute_cluster_name"></a> [compute\_cluster\_name](#input\_compute\_cluster\_name) | Name of Compute Cluster in order to location the resource pool to deploy VM. All clusters and standalone hosts have a default root resource pool. This resource argument does not directly accept the cluster or standalone host resource. For more information, see the section on Specifying the Root Resource Pool in the vsphere\_resource\_pool data source documentation on using the root resource pool. | `list(string)` | <pre>[<br>  ""<br>]</pre> | no |
 | <a name="input_control_gateway"></a> [control\_gateway](#input\_control\_gateway) | Default gateway for BC/AC control interface if statically setting via provisioning url. Leave blank if using DHCP | `string` | `""` | no |
@@ -103,7 +104,6 @@ From bc_ac directory execute:
 | <a name="input_datastore_cluster"></a> [datastore\_cluster](#input\_datastore\_cluster) | Datastore cluster to deploy the VM. Use of datastore\_cluster\_id requires vSphere Storage DRS to be enabled on the specified datastore cluster. | `list(string)` | <pre>[<br>  ""<br>]</pre> | no |
 | <a name="input_datastore_cluster_enabled"></a> [datastore\_cluster\_enabled](#input\_datastore\_cluster\_enabled) | True/False to tell VM creation that the datastore is or is not part of a cluster. Default is false | `bool` | `false` | no |
 | <a name="input_disk_provisioning"></a> [disk\_provisioning](#input\_disk\_provisioning) | The disk provisioning policy. If set, all the disks included in the OVF/OVA will have the same specified policy. One of thin, flat, thick, or sameAsSource | `string` | `"thin"` | no |
-| <a name="input_disk_size"></a> [disk\_size](#input\_disk\_size) | size of disk 0 | `string` | `"128"` | no |
 | <a name="input_dns_servers"></a> [dns\_servers](#input\_dns\_servers) | Primary/Secondary DNS servers for BC management interface if statically setting via provisioning url. Leave blank if using DHCP | `list(string)` | <pre>[<br>  ""<br>]</pre> | no |
 | <a name="input_dns_suffix"></a> [dns\_suffix](#input\_dns\_suffix) | Primary DNS suffix for BC management interface if statically setting via provisioning url. Leave blank if using DHCP | `string` | `""` | no |
 | <a name="input_enrollment_cert"></a> [enrollment\_cert](#input\_enrollment\_cert) | Get name of ZPA enrollment cert to be used for App Connector provisioning | `string` | `"Connector"` | no |
@@ -120,8 +120,6 @@ From bc_ac directory execute:
 | <a name="input_provisioning_key_max_usage"></a> [provisioning\_key\_max\_usage](#input\_provisioning\_key\_max\_usage) | The maximum number of instances where this provisioning key can be used for enrolling an App Connector or Service Edge | `number` | `10` | no |
 | <a name="input_provisioning_key_name"></a> [provisioning\_key\_name](#input\_provisioning\_key\_name) | Custom name for App Connector Provisioning Key created | `string` | `""` | no |
 | <a name="input_resource_pool_name"></a> [resource\_pool\_name](#input\_resource\_pool\_name) | Name of ESXi host resource group. If one is not specified, the VMware default name of 'Resources' is used | `list(string)` | <pre>[<br>  ""<br>]</pre> | no |
-| <a name="input_scsi_type"></a> [scsi\_type](#input\_scsi\_type) | The SCSI controller type for the virtual machine | `string` | `"lsilogic"` | no |
-| <a name="input_thin_provisioned_enabled"></a> [thin\_provisioned\_enabled](#input\_thin\_provisioned\_enabled) | Whether to thin provision the VM disk or not. Default is true | `bool` | `true` | no |
 | <a name="input_tls_key_algorithm"></a> [tls\_key\_algorithm](#input\_tls\_key\_algorithm) | algorithm for tls\_private\_key resource | `string` | `"RSA"` | no |
 
 ## Outputs
