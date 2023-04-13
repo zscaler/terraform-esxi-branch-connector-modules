@@ -9,7 +9,7 @@ Zscaler Branch Connector VMware ESXi/vSphere Terraform Modules
 ===========================================================================================================
 
 # **README for VMware ESXi Terraform**
-This README serves as a quick start guide to deploy Zscaler Branch Connector resources in a VMware ESXi vCenter environment using Terraform. To learn more about the resources created when deploying Branch Connector with Terraform, see [Deployment Templates for Zscaler Branch Connector](https://help.zscaler.com/cloud-connector/brnch/deployment-templates-zscaler-branch-connector). These deployment templates are intended to be fully functional and self service for production use. All modules may also be utilized as design recommendation based on the [Zscaler Zero Trust SD-WAN Datasheet](https://www.zscaler.com/resources/data-sheets/zscaler-zero-trust-sd-wan.pdf) .
+This README serves as a quick start guide to deploy Zscaler Branch Connector resources in a VMware ESXi vCenter environment using Terraform. To learn more about the resources created when deploying Branch Connector with Terraform, see [Deployment Templates for Zscaler Branch Connector](https://help.zscaler.com/cloud-branch-connector/deployment-templates-zscaler-branch-connector-app-connector). These deployment templates are intended to be fully functional and self service for production use. All modules may also be utilized as design recommendation based on the [Zscaler Zero Trust SD-WAN Datasheet](https://www.zscaler.com/resources/data-sheets/zscaler-zero-trust-sd-wan.pdf) .
 
 
 ## **ESXi Deployment Scripts for Terraform**
